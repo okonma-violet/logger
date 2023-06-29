@@ -2,13 +2,11 @@ package logger
 
 import (
 	"time"
-
-	"github.com/okonma-violet/logs/encode"
 )
 
-type Flusher struct {
-	ch         chan [][]byte
-	flushlvl   encode.LogsFlushLevel
+type LocalFlusher struct {
+	ch         chan []locallogframe
+	flushlvl   LogsFlushLevel
 	cancel     chan struct{}
 	allflushed chan struct{}
 }
@@ -18,10 +16,9 @@ var flushertags []byte
 const chanlen = 4
 
 // TODO: make logsserver
-// when nonlocal = true, flush logs to logsservers, when logsserver is not available, saves logs for further flush to this server on reconnect
-func NewFlusher(logsflushlvl encode.LogsFlushLevel /*, nonlocal bool*/) LogsFlusher {
-	f := &Flusher{
-		ch:         make(chan [][]byte, chanlen),
+func NewLocalFlusher(logsflushlvl LogsFlushLevel) LogsFlusher {
+	f := &LocalFlusher{
+		ch:         make(chan []locallogframe, chanlen),
 		flushlvl:   logsflushlvl,
 		cancel:     make(chan struct{}),
 		allflushed: make(chan struct{}),
@@ -30,23 +27,22 @@ func NewFlusher(logsflushlvl encode.LogsFlushLevel /*, nonlocal bool*/) LogsFlus
 	return f
 }
 
-func (f *Flusher) flushWorker() {
-	//println("THIS") ////////////////////
+func (f *LocalFlusher) flushWorker() {
 	for {
 		select {
 		case logslist := <-f.ch:
-			for _, bytelog := range logslist {
-				if encode.GetLogLvl(bytelog) >= f.flushlvl {
-					encode.PrintLog(bytelog)
+			for _, frame := range logslist {
+				if LogsFlushLevel(frame.lt) >= f.flushlvl {
+					println(frame.body)
 				}
 			}
 		case <-f.cancel:
 			for {
 				select {
 				case logslist := <-f.ch:
-					for _, bytelog := range logslist {
-						if encode.GetLogLvl(bytelog) >= f.flushlvl {
-							encode.PrintLog(bytelog)
+					for _, frame := range logslist {
+						if LogsFlushLevel(frame.lt) >= f.flushlvl {
+							println(frame.body)
 						}
 					}
 				default:
@@ -58,21 +54,42 @@ func (f *Flusher) flushWorker() {
 	}
 }
 
-func (f *Flusher) Close() {
-	close(f.cancel)
-}
-
-func (f *Flusher) Done() <-chan struct{} {
+func (f *LocalFlusher) Done() <-chan struct{} {
 	return f.allflushed
 }
-func (f *Flusher) DoneWithTimeout(timeout time.Duration) {
+
+func (f *LocalFlusher) DoneWithTimeout(timeout time.Duration) {
 	t := time.NewTimer(timeout)
 	select {
 	case <-f.allflushed:
 		return
 	case <-t.C:
-		encode.PrintLog(encode.EncodeLog(encode.Error, time.Now(), flushertags, "DoneWithTimeout", "reached timeout, skip last flush"))
+		PrintLn(Error, "Flusher", "bone by reached timeout, don't wait last flush")
 		return
 	}
+}
 
+func (f *LocalFlusher) Close() {
+	close(f.cancel)
+}
+
+type NetFlusher struct {
+	localflusher *LocalFlusher
+	ch           chan []netlogframe
+	//flushlvl   LogsFlushLevel
+	cancel     chan struct{}
+	allflushed chan struct{}
+
+	servers []*nonEpollReConnector
+}
+
+func NewNetFlusher(local_logsflushlvl, net_logsflushlvl LogsFlushLevel) LogsFlusher {
+	f := &NetFlusher{
+		ch: make(chan []netlogframe, chanlen),
+		//flushlvl:   logsflushlvl,
+		cancel:     make(chan struct{}),
+		allflushed: make(chan struct{}),
+	}
+	go f.flushWorker()
+	return f
 }

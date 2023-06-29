@@ -5,7 +5,7 @@ import "time"
 type Logger interface {
 	LogsWriter
 	NewSubLogger(tags ...string) Logger
-	NewPackageSubLogger(logsBufLen int, tags ...string) PackageLogger
+	//NewPackageSubLogger(logsBufLen int, tags ...string) PackageLogger
 }
 
 type PackageLogger interface {

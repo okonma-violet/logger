@@ -5,7 +5,7 @@ import (
 )
 
 type LocalLogsContainer struct {
-	ch   chan [][]byte
+	ch   chan []locallogframe
 	tags []string
 }
 
@@ -14,15 +14,15 @@ func (f *LocalFlusher) NewLogsContainer(tags ...string) Logger {
 }
 
 func (l *LocalLogsContainer) Debug(name, logstr string) {
-	l.ch <- []logframe{newLogFrame(Debug, time.Now(), l.tags, logstr)}
+	l.ch <- []locallogframe{newLocalLogFrame()}
 }
 
 func (l *LocalLogsContainer) Info(name, logstr string) {
-	l.ch <- []logframe{newLogFrame(Debug, time.Now(), l.tags, logstr)}
+	l.ch <- []locallogframe{newLogFrame(Debug, time.Now(), l.tags, logstr)}
 }
 
 func (l *LocalLogsContainer) Warning(name, logstr string) {
-	l.ch <- []logframe{newLogFrame(Debug, time.Now(), l.tags, logstr)}
+	l.ch <- []locallogframe{newLogFrame(Debug, time.Now(), l.tags, logstr)}
 }
 
 func (l *LocalLogsContainer) Error(name string, logerr error) {
